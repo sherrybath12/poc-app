@@ -1,0 +1,121 @@
+version: 2.1
+
+# CIRCLECI_API_TOKEN  — set in this project's CircleCI environment variables
+# PLAYWRIGHT_REPO_SLUG — set to "sherrybath12/playwright-automation"
+
+jobs:
+  deploy-dev:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - run:
+          name: Deploy to Dev
+          command: |
+            echo "Deploying to dev..."
+            sleep 30
+            echo "Deploy to dev complete."
+      - run:
+          name: Trigger & wait — Playwright dev tests
+          command: |
+            PIPELINE_ID=$(curl -s --request POST \
+              --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
+              --header "Circle-Token: $CIRCLECI_API_TOKEN" \
+              --header "content-type: application/json" \
+              --data '{"parameters": {"ENV": "dev"}}' | jq -r '.id')
+
+            echo "Triggered pipeline: $PIPELINE_ID"
+
+            until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
+              sleep 20
+              STATUS=$(curl -s --request GET \
+                --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
+                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+              echo "Dev test pipeline status: $STATUS"
+            done
+
+            [ "$STATUS" = "success" ] || { echo "Dev tests failed — blocking staging deploy"; exit 1; }
+
+  deploy-staging:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - run:
+          name: Deploy to Staging
+          command: |
+            echo "Deploying to staging..."
+            sleep 30
+            echo "Deploy to staging complete."
+      - run:
+          name: Trigger & wait — Playwright staging tests
+          command: |
+            PIPELINE_ID=$(curl -s --request POST \
+              --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
+              --header "Circle-Token: $CIRCLECI_API_TOKEN" \
+              --header "content-type: application/json" \
+              --data '{"parameters": {"ENV": "staging"}}' | jq -r '.id')
+
+            echo "Triggered pipeline: $PIPELINE_ID"
+
+            until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
+              sleep 20
+              STATUS=$(curl -s --request GET \
+                --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
+                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+              echo "Staging test pipeline status: $STATUS"
+            done
+
+            [ "$STATUS" = "success" ] || { echo "Staging tests failed — blocking prod deploy"; exit 1; }
+
+  deploy-prod:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - run:
+          name: Deploy to Prod
+          command: |
+            echo "Deploying to prod..."
+            sleep 30
+            echo "Deploy to prod complete."
+      - run:
+          name: Trigger & wait — Playwright prod tests
+          command: |
+            PIPELINE_ID=$(curl -s --request POST \
+              --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
+              --header "Circle-Token: $CIRCLECI_API_TOKEN" \
+              --header "content-type: application/json" \
+              --data '{"parameters": {"ENV": "prod"}}' | jq -r '.id')
+
+            echo "Triggered pipeline: $PIPELINE_ID"
+
+            until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
+              sleep 20
+              STATUS=$(curl -s --request GET \
+                --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
+                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+              echo "Prod test pipeline status: $STATUS"
+            done
+
+            [ "$STATUS" = "success" ] || { echo "Prod tests failed."; exit 1; }
+
+workflows:
+  deploy-test-promote:
+    jobs:
+      - deploy-dev:
+          filters:
+            branches:
+              only: main
+      - deploy-staging:
+          requires:
+            - deploy-dev
+          filters:
+            branches:
+              only: main
+      - deploy-prod:
+          requires:
+            - deploy-staging
+          filters:
+            branches:
+              only: main
