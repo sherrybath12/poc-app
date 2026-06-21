@@ -24,16 +24,21 @@ jobs:
               --header "content-type: application/json" \
               --data '{"parameters": {"ENV": "dev"}}')
 
-            echo "API response: $RESPONSE"
+            echo "Trigger response: $RESPONSE"
             PIPELINE_ID=$(echo "$RESPONSE" | jq -r '.id')
             echo "Triggered pipeline: $PIPELINE_ID"
 
+            echo "Waiting 15s for workflow to be created..."
+            sleep 15
+
             until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
-              sleep 20
-              STATUS=$(curl -s --request GET \
+              POLL_RESPONSE=$(curl -s --request GET \
                 --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
-                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+                --header "Circle-Token: $CIRCLECI_API_TOKEN")
+              echo "Poll response: $POLL_RESPONSE"
+              STATUS=$(echo "$POLL_RESPONSE" | jq -r '.items[0].status')
               echo "Dev test pipeline status: $STATUS"
+              sleep 20
             done
 
             [ "$STATUS" = "success" ] || { echo "Dev tests failed — blocking staging deploy"; exit 1; }
@@ -52,20 +57,27 @@ jobs:
       - run:
           name: Trigger & wait — Playwright staging tests
           command: |
-            PIPELINE_ID=$(curl -s --request POST \
+            RESPONSE=$(curl -s --request POST \
               --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
               --header "Circle-Token: $CIRCLECI_API_TOKEN" \
               --header "content-type: application/json" \
-              --data '{"parameters": {"ENV": "staging"}}' | jq -r '.id')
+              --data '{"parameters": {"ENV": "staging"}}')
 
+            echo "Trigger response: $RESPONSE"
+            PIPELINE_ID=$(echo "$RESPONSE" | jq -r '.id')
             echo "Triggered pipeline: $PIPELINE_ID"
 
+            echo "Waiting 15s for workflow to be created..."
+            sleep 15
+
             until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
-              sleep 20
-              STATUS=$(curl -s --request GET \
+              POLL_RESPONSE=$(curl -s --request GET \
                 --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
-                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+                --header "Circle-Token: $CIRCLECI_API_TOKEN")
+              echo "Poll response: $POLL_RESPONSE"
+              STATUS=$(echo "$POLL_RESPONSE" | jq -r '.items[0].status')
               echo "Staging test pipeline status: $STATUS"
+              sleep 20
             done
 
             [ "$STATUS" = "success" ] || { echo "Staging tests failed — blocking prod deploy"; exit 1; }
@@ -84,20 +96,27 @@ jobs:
       - run:
           name: Trigger & wait — Playwright prod tests
           command: |
-            PIPELINE_ID=$(curl -s --request POST \
+            RESPONSE=$(curl -s --request POST \
               --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
               --header "Circle-Token: $CIRCLECI_API_TOKEN" \
               --header "content-type: application/json" \
-              --data '{"parameters": {"ENV": "prod"}}' | jq -r '.id')
+              --data '{"parameters": {"ENV": "prod"}}')
 
+            echo "Trigger response: $RESPONSE"
+            PIPELINE_ID=$(echo "$RESPONSE" | jq -r '.id')
             echo "Triggered pipeline: $PIPELINE_ID"
 
+            echo "Waiting 15s for workflow to be created..."
+            sleep 15
+
             until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
-              sleep 20
-              STATUS=$(curl -s --request GET \
+              POLL_RESPONSE=$(curl -s --request GET \
                 --url "https://circleci.com/api/v2/pipeline/$PIPELINE_ID/workflow" \
-                --header "Circle-Token: $CIRCLECI_API_TOKEN" | jq -r '.items[0].status')
+                --header "Circle-Token: $CIRCLECI_API_TOKEN")
+              echo "Poll response: $POLL_RESPONSE"
+              STATUS=$(echo "$POLL_RESPONSE" | jq -r '.items[0].status')
               echo "Prod test pipeline status: $STATUS"
+              sleep 20
             done
 
             [ "$STATUS" = "success" ] || { echo "Prod tests failed."; exit 1; }
