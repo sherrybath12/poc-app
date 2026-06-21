@@ -18,12 +18,14 @@ jobs:
       - run:
           name: Trigger & wait — Playwright dev tests
           command: |
-            PIPELINE_ID=$(curl -s --request POST \
+            RESPONSE=$(curl -s --request POST \
               --url "https://circleci.com/api/v2/project/github/$PLAYWRIGHT_REPO_SLUG/pipeline" \
               --header "Circle-Token: $CIRCLECI_API_TOKEN" \
               --header "content-type: application/json" \
-              --data '{"parameters": {"ENV": "dev"}}' | jq -r '.id')
+              --data '{"parameters": {"ENV": "dev"}}')
 
+            echo "API response: $RESPONSE"
+            PIPELINE_ID=$(echo "$RESPONSE" | jq -r '.id')
             echo "Triggered pipeline: $PIPELINE_ID"
 
             until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
