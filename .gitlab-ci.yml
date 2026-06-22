@@ -1,0 +1,79 @@
+stages:
+  - deploy-dev
+  - test-dev
+  - deploy-staging
+  - test-staging
+  - deploy-prod
+  - test-prod
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+.trigger_playwright:
+  script:
+    - |
+      RESPONSE=$(curl -s --request POST \
+        --url "https://gitlab.com/api/v4/projects/83655105/pipeline" \
+        --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+        --header "content-type: application/json" \
+        --data "{\"ref\": \"main\", \"variables\": [{\"key\": \"ENV\", \"value\": \"$DEPLOY_ENV\"}]}")
+
+      echo "Trigger response: $RESPONSE"
+      PIPELINE_ID=$(echo "$RESPONSE" | jq -r '.id')
+      echo "Triggered pipeline: $PIPELINE_ID"
+
+      echo "Waiting 15s for pipeline to start..."
+      sleep 15
+
+      STATUS="pending"
+      until [ "$STATUS" = "success" ] || [ "$STATUS" = "failed" ] || [ "$STATUS" = "canceled" ]; do
+        POLL_RESPONSE=$(curl -s --request GET \
+          --url "https://gitlab.com/api/v4/projects/83655105/pipelines/$PIPELINE_ID" \
+          --header "PRIVATE-TOKEN: $GITLAB_API_TOKEN")
+        echo "Poll response: $POLL_RESPONSE"
+        STATUS=$(echo "$POLL_RESPONSE" | jq -r '.status')
+        echo "$DEPLOY_ENV test pipeline status: $STATUS"
+        sleep 20
+      done
+
+      [ "$STATUS" = "success" ] || { echo "$DEPLOY_ENV tests failed — blocking next deploy"; exit 1; }
+
+deploy-dev:
+  stage: deploy-dev
+  script:
+    - echo "ArgoCD syncing to dev..."
+    - sleep 30
+    - echo "ArgoCD sync to dev complete."
+
+test-dev:
+  stage: test-dev
+  extends: .trigger_playwright
+  variables:
+    DEPLOY_ENV: dev
+
+deploy-staging:
+  stage: deploy-staging
+  script:
+    - echo "ArgoCD syncing to staging..."
+    - sleep 30
+    - echo "ArgoCD sync to staging complete."
+
+test-staging:
+  stage: test-staging
+  extends: .trigger_playwright
+  variables:
+    DEPLOY_ENV: staging
+
+deploy-prod:
+  stage: deploy-prod
+  script:
+    - echo "ArgoCD syncing to prod..."
+    - sleep 30
+    - echo "ArgoCD sync to prod complete."
+
+test-prod:
+  stage: test-prod
+  extends: .trigger_playwright
+  variables:
+    DEPLOY_ENV: prod
